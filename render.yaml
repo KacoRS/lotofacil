@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: lotofacil-central
-    runtime: php
-    plan: free
-    buildCommand: ""
-    startCommand: ""
