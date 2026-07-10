@@ -79,12 +79,12 @@ $dados = [
     'acumulou' => $acumulou
 ];
 
+// ==========================================
 // 6. CÁLCULO DAS ESTATÍSTICAS DO CONCURSO
+// ==========================================
 $pares = 0;
 $impares = 0;
-$primos = 0;
 $soma = 0;
-$lista_primos = [2, 3, 5, 7, 11, 13, 17, 19, 23];
 
 foreach ($dados['dezenas'] as $num) {
     $n = (int)$num;
@@ -95,9 +95,23 @@ foreach ($dados['dezenas'] as $num) {
     } else {
         $impares++;
     }
-    
-    if (in_array($n, $lista_primos)) {
-        $primos++;
+}
+
+// NOVO: Busca o concurso anterior para calcular as dezenas repetidas
+$concurso_anterior = $concurso_atual - 1;
+$repetidas = 0;
+
+if ($concurso_anterior >= 1) {
+    $dados_anterior = buscar_dados_da_pauta("https://loteriascaixa-api.herokuapp.com/api/lotofacil/" . $concurso_anterior);
+    if ($dados_anterior && isset($dados_anterior['dezenas'])) {
+        // Cruza as dezenas atuais com as do sorteio anterior
+        foreach ($dados['dezenas'] as $dezena_atual) {
+            if (in_array($dezena_atual, $dados_anterior['dezenas'])) {
+                $repetidas++;
+            }
+        }
+    } else {
+        $repetidas = "Não disponível";
     }
 }
 
@@ -254,8 +268,8 @@ if ($anterior < 1) { $anterior = 1; }
             <td><?= $pares ?> pares / <?= $impares ?> &iacute;mpares</td>
         </tr>
         <tr>
-            <td>N&uacute;meros Primos</td>
-            <td><?= $primos ?> dezenas</td>
+            <td>Repetidas do Anterior (Concurso <?= $concurso_anterior ?>)</td>
+            <td><?= $repetidas ?> dezenas</td>
         </tr>
         <tr>
             <td>Soma das Dezenas</td>
