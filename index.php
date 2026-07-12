@@ -4,7 +4,7 @@ header('Content-Type: text/html; charset=utf-8');
 $arquivo_cache = "cache_lotofacil.txt";
 $tempo_expiracao = 1800; // 30 minutos
 
-// 1. Captura o concurso solicitado na URL
+// 1. Captura o concurso solicitado na URL e a aba ativa
 $concurso_atual = isset($_GET['concurso']) ? (int)$_GET['concurso'] : 0;
 $aba_ativa = isset($_GET['aba']) ? $_GET['aba'] : 'resultado';
 
@@ -76,7 +76,7 @@ $dados = [
     'acumulou' => $acumulou
 ];
 
-// Cálculo simples de Pares / Ímpares / Soma
+// Cálculo simples de Pares / Ímpares / Soma do concurso atual
 $pares = 0; $impares = 0; $soma = 0;
 foreach ($dados['dezenas'] as $num) {
     $n = (int)$num; $soma += $n;
@@ -95,15 +95,14 @@ if ($concurso_anterior >= 1) {
     } else { $repetidas = "Sem dados"; }
 }
 
-// ==========================================
-// LÓGICA DAS ABAS AVANÇADAS (ÚLTIMOS 30 CONCURSOS)
-// ==========================================
+// =========================================================
+// LÓGICA DE HISTÓRICO, FREQUÊNCIA E ATRASO (ÚLTIMOS 30 CONCURSOS)
+// =========================================================
 $historico_concursos = [];
 $frequencia_globais = array_fill(1, 25, 0);
 $atraso_globais = array_fill(1, 25, 0);
 $dezenas_vistas = [];
 
-// Buscaremos uma amostragem dos últimos 30 concursos para montar os gráficos/listas
 $inicio_busca = $ultimo_concurso_na_caixa;
 $total_amostra = 30;
 
@@ -111,17 +110,14 @@ for ($i = 0; $i < $total_amostra; $i++) {
     $num_c = $inicio_busca - $i;
     if ($num_c < 1) break;
     
-    // Para performance ideal, usamos dados estáticos simulados se faltar conexão na API em lote
     $dados_c = buscar_dados_da_pauta("https://loteriascaixa-api.herokuapp.com/api/lotofacil/" . $num_c);
     if ($dados_c && isset($dados_c['dezenas'])) {
         $historico_concursos[] = $dados_c;
         
-        // Conta Frequência
         foreach ($dados_c['dezenas'] as $d) {
             $frequencia_globais[(int)$d]++;
         }
         
-        // Calcula Atraso (vê a última vez que apareceu)
         foreach (range(1, 25) as $dezena_check) {
             if (in_array(str_pad($dezena_check, 2, '0', STR_PAD_LEFT), $dados_c['dezenas']) && !isset($dezenas_vistas[$dezena_check])) {
                 $atraso_globais[$dezena_check] = $i;
@@ -131,13 +127,38 @@ for ($i = 0; $i < $total_amostra; $i++) {
     }
 }
 
-// Ajusta quem nunca apareceu na amostragem para o atraso máximo
 foreach (range(1, 25) as $d_check) {
     if (!isset($dezenas_vistas[$d_check])) { $atraso_globais[$d_check] = $total_amostra; }
 }
 
-arsort($frequencia_globais); // Ordena de mais frequente para menos
-arsort($atraso_globais);     // Ordena do mais atrasado para o menos
+// ==========================================
+// LÓGICA EXCLUSIVA: DEZENAS AUSENTES
+// ==========================================
+$dezenas_ausentes = [];
+$ausentes_pares = 0;
+$ausentes_impares = 0;
+$soma_atrasos_ausentes = 0;
+
+for ($num = 1; $num <= 25; $num++) {
+    $num_formatado = str_pad($num, 2, '0', STR_PAD_LEFT);
+    // Se NÃO está nas dezenas sorteadas do concurso atual, ela está ausente
+    if (!in_array($num_formatado, $dados['dezenas'])) {
+        $dezenas_ausentes[] = $num_formatado;
+        
+        if ($num % 2 == 0) { $ausentes_pares++; } else { $ausentes_impares++; }
+        $soma_atrasos_ausentes += $atraso_globais[$num];
+    }
+}
+
+// Cria uma lista de ausentes ordenada pelas mais atrasadas
+$ausentes_ordenadas_por_atraso = $dezenas_ausentes;
+usort($ausentes_ordenadas_por_atraso, function($a, $b) use ($atraso_globais) {
+    return $atraso_globais[(int)$b] <=> $atraso_globais[(int)$a];
+});
+
+// Ordenações para os menus globais de Frequência e Atraso
+arsort($frequencia_globais);
+arsort($atraso_globais);
 
 $anterior = $concurso_atual - 1;
 $proximo = $concurso_atual + 1;
@@ -157,20 +178,20 @@ if ($anterior < 1) { $anterior = 1; }
         h2 { color: #931f7c; font-size: 1.2em; margin-top: 25px; margin-bottom: 15px; border-bottom: 2px solid #931f7c; padding-bottom: 5px; text-align: left; }
         .data-sorteio { color: #666; font-size: 0.9em; margin-bottom: 25px; }
         
-        /* Menu de Abas Estilo Profissional */
-        .abas-menu { display: flex; justify-content: space-around; border-bottom: 2px solid #eee; margin-bottom: 20px; }
-        .tab-link { padding: 10px 15px; text-decoration: none; color: #666; font-weight: bold; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .abas-menu { display: flex; justify-content: space-around; border-bottom: 2px solid #eee; margin-bottom: 20px; flex-wrap: wrap; gap: 5px; }
+        .tab-link { padding: 10px 10px; text-decoration: none; color: #666; font-weight: bold; border-bottom: 3px solid transparent; transition: all 0.2s; font-size: 0.9em; }
         .tab-link.active { color: #931f7c; border-bottom-color: #931f7c; }
         
         .dezenas-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 30px; }
         .dezena { background-color: #931f7c; color: white; font-weight: bold; font-size: 1.2em; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .dezena.ausente { background-color: #d9534f; } /* Vermelho para identificar ausência */
+
         .info-table, .estatisticas-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .info-table td, .estatisticas-table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
         .info-table td:last-child, .estatisticas-table td:last-child { text-align: right; font-weight: bold; }
         
-        /* Estilos dos Rankings */
         .ranking-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.95em; }
-        .barra-progresso { background: #eee; border-radius: 4px; height: 10px; width: 60%; margin: auto 10px; overflow: hidden; }
+        .barra-progresso { background: #eee; border-radius: 4px; height: 10px; width: 50%; margin: auto 10px; overflow: hidden; }
         .barra-preenchida { background: #931f7c; height: 100%; }
         .barra-preenchida.atraso { background: #d9534f; }
         
@@ -188,6 +209,7 @@ if ($anterior < 1) { $anterior = 1; }
         <a href="?concurso=<?= $concurso_atual ?>&aba=resultado" class="tab-link <?= $aba_ativa == 'resultado' ? 'active' : '' ?>">🏠 Resultado</a>
         <a href="?concurso=<?= $concurso_atual ?>&aba=frequencia" class="tab-link <?= $aba_ativa == 'frequencia' ? 'active' : '' ?>">📊 Frequência</a>
         <a href="?concurso=<?= $concurso_atual ?>&aba=atraso" class="tab-link <?= $aba_ativa == 'atraso' ? 'active' : '' ?>">⏱️ Atraso</a>
+        <a href="?concurso=<?= $concurso_atual ?>&aba=ausentes" class="tab-link <?= $aba_ativa == 'ausentes' ? 'active' : '' ?>">⭕ Ausentes</a>
         <a href="?concurso=<?= $concurso_atual ?>&aba=historico" class="tab-link <?= $aba_ativa == 'historico' ? 'active' : '' ?>">📅 Histórico</a>
     </div>
 
@@ -216,9 +238,7 @@ if ($anterior < 1) { $anterior = 1; }
 
     <?php elseif ($aba_ativa == 'frequencia'): ?>
         <h2>Ranking de Frequência (Últimos 30 Concursos)</h2>
-        <p style="font-size:0.85em; color:#666; margin-bottom:15px;">Mostra quais dezenas saíram mais vezes recentemente.</p>
-        <?php foreach ($frequencia_globais as $dezena => $qtd): 
-            $pct = ($qtd / $total_amostra) * 100; ?>
+        <?php foreach ($frequencia_globais as $dezena => $qtd): $pct = ($qtd / $total_amostra) * 100; ?>
             <div class="ranking-item">
                 <strong>Dezena <?= str_pad($dezena, 2, '0', STR_PAD_LEFT) ?></strong>
                 <div class="barra-progresso"><div class="barra-preenchida" style="width: <?= $pct ?>%;"></div></div>
@@ -228,13 +248,37 @@ if ($anterior < 1) { $anterior = 1; }
 
     <?php elseif ($aba_ativa == 'atraso'): ?>
         <h2>Ranking de Atraso</h2>
-        <p style="font-size:0.85em; color:#666; margin-bottom:15px;">Quantos concursos seguidos a dezena está sem aparecer.</p>
-        <?php foreach ($atraso_globais as $dezena => $atraso): 
-            $pct_atraso = min(($atraso / $total_amostra) * 100, 100); ?>
+        <?php foreach ($atraso_globais as $dezena => $atraso): $pct_atraso = min(($atraso / $total_amostra) * 100, 100); ?>
             <div class="ranking-item">
                 <strong>Dezena <?= str_pad($dezena, 2, '0', STR_PAD_LEFT) ?></strong>
                 <div class="barra-progresso"><div class="barra-preenchida atraso" style="width: <?= $pct_atraso ?>%;"></div></div>
                 <span><?= $atraso ?> conc. atrás</span>
+            </div>
+        <?php endforeach; ?>
+
+    <?php elseif ($aba_ativa == 'ausentes'): ?>
+        <h2>Dezenas Ausentes no Concurso <?= $concurso_atual ?></h2>
+        <p style="font-size:0.85em; color:#666; margin-bottom:15px;">As 10 dezenas que ficaram de fora deste sorteio.</p>
+        
+        <div class="dezenas-container">
+            <?php foreach ($dezenas_ausentes as $da): ?>
+                <div class="dezena ausente"><?= $da ?></div>
+            <?php endforeach; ?>
+        </div>
+
+        <table class="estatisticas-table">
+            <tr><td>Pares / Ímpares das Ausentes</td><td><?= $ausentes_pares ?> pares / <?= $ausentes_impares ?> ímpares</td></tr>
+            <tr><td>Soma total dos atrasos acumulados</td><td><?= $soma_atrasos_ausentes ?> concursos</td></tr>
+        </table>
+
+        <h2>Ranking de Atraso entre as Ausentes</h2>
+        <?php foreach ($ausentes_ordenadas_por_atraso as $da_ord): 
+            $atr = $atraso_globais[(int)$da_ord]; 
+            $pct_da = min(($atr / $total_amostra) * 100, 100); ?>
+            <div class="ranking-item">
+                <strong>Dezena <?= $da_ord ?></strong>
+                <div class="barra-progresso"><div class="barra-preenchida atraso" style="width: <?= $pct_da ?>%;"></div></div>
+                <span><?= $atr ?> conc. atrás</span>
             </div>
         <?php endforeach; ?>
 
