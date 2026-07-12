@@ -150,10 +150,13 @@ for ($num = 1; $num <= 25; $num++) {
     }
 }
 
-// Cria uma lista de ausentes ordenada pelas mais atrasadas
+// Cria uma lista de ausentes ordenada pelas mais atrasadas (Substituído <=> por IF clássico)
 $ausentes_ordenadas_por_atraso = $dezenas_ausentes;
 usort($ausentes_ordenadas_por_atraso, function($a, $b) use ($atraso_globais) {
-    return $atraso_globais[(int)$b] <=> $atraso_globais[(int)$a];
+    $atrasoA = $atraso_globais[(int)$a];
+    $atrasoB = $atraso_globais[(int)$b];
+    if ($atrasoA == $atrasoB) return 0;
+    return ($atrasoA < $atrasoB) ? 1 : -1;
 });
 
 // Ordenações para os menus globais de Frequência e Atraso
@@ -184,7 +187,7 @@ if ($anterior < 1) { $anterior = 1; }
         
         .dezenas-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 30px; }
         .dezena { background-color: #931f7c; color: white; font-weight: bold; font-size: 1.2em; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .dezena.ausente { background-color: #d9534f; } /* Vermelho para identificar ausência */
+        .dezena.ausente { background-color: #d9534f; }
 
         .info-table, .estatisticas-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .info-table td, .estatisticas-table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
