@@ -5,8 +5,14 @@ ini_set('memory_limit', '256M');
 
 header('Content-Type: text/html; charset=utf-8');
 
+// ===================== CONFIGURAÇÕES PARA DOCKER =====================
 $banco_dados = "todos_sorteios.json";
-$url_api = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/";
+
+// Garante que o arquivo existe e tem permissão de escrita (importante no Docker)
+if (!file_exists($banco_dados)) {
+    file_put_contents($banco_dados, "[]");
+}
+chmod($banco_dados, 0666);   // Permissão de leitura e escrita
 
 // Função para buscar dados na API
 function extrair_api($url) {
@@ -26,21 +32,23 @@ if (file_exists($banco_dados)) {
     $historico_local = json_decode(file_get_contents($banco_dados), true) ?: [];
 }
 
-// Organiza o histórico local pelo número do concurso para facilitar checagem
+// Organiza o histórico local pelo número do concurso
 $local_por_id = [];
 foreach ($historico_local as $c) {
-    if (isset($c['concurso'])) $local_por_id[(int)$c['concurso']] = $c;
+    if (isset($c['concurso'])) {
+        $local_por_id[(int)$c['concurso']] = $c;
+    }
 }
 
 // 2. Pega o último resultado direto da Caixa
-$ultimo_caixa = extrair_api($url_api . "latest");
+$ultimo_caixa = extrair_api($url_api = "https://loteriascaixa-api.herokuapp.com/api/lotofacil/latest");
 
 if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
     $num_ultimo = (int)$ultimo_caixa['concurso'];
     
     $concursos_que_faltam = [];
     
-    // Varre do último até o primeiro para ver quais concursos NÃO temos salvos
+    // Varre do último até o primeiro
     for ($i = $num_ultimo; $i >= 1; $i--) {
         if (!isset($local_por_id[$i])) {
             $concursos_que_faltam[] = $i;
@@ -50,7 +58,7 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
     $total_faltando = count($concursos_que_faltam);
     
     if ($total_faltando > 0) {
-        // Para não dar timeout de 504, vamos baixar apenas um LOTE de 100 concursos por vez
+        // Baixa lote de 100 por vez
         $lote_importacao = array_slice($concursos_que_faltam, 0, 100);
         $novos_salvos = 0;
         
@@ -60,14 +68,11 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
         echo "<p>Baixando lote atual de " . count($lote_importacao) . " concursos. Aguarde...</p>";
         echo "<hr style='border: 1px solid #eee;'>";
         
-        // Descarrega o buffer de saída para mostrar o texto na tela enquanto processa
-        ob_start();
-        echo " ";
         ob_flush();
         flush();
         
         foreach ($lote_importacao as $concurso_alvo) {
-            $dados_c = extrair_api($url_api . $concurso_alvo);
+            $dados_c = extrair_api("https://loteriascaixa-api.herokuapp.com/api/lotofacil/" . $concurso_alvo);
             if ($dados_c && isset($dados_c['dezenas'])) {
                 $local_por_id[$concurso_alvo] = [
                     'concurso' => (int)$dados_c['concurso'],
@@ -77,8 +82,7 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
                 ];
                 $novos_salvos++;
             }
-            // Pausa de 0.2 segundos para não sobrecarregar
-            usleep(200000); 
+            usleep(200000); // 0.2 segundos
         }
         
         if ($novos_salvos > 0) {
@@ -90,7 +94,7 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
         echo "<p id='contador'>Reiniciando em 3 segundos para o próximo lote... Não feche esta janela!</p>";
         echo "</div>";
         
-        // Redirecionamento forçado via JavaScript (burlar bloqueio do servidor)
+        // Redirecionamento automático
         echo "
         <script>
             var segundos = 3;
@@ -100,7 +104,7 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
                     clearInterval(intervalo);
                     window.location.href = 'sincronizar.php';
                 } else {
-                    document.getElementById('contador').innerHTML = 'Reiniciando em ' + segundos + ' segundos para o próximo lote... Não feche esta janela!';
+                    document.getElementById('contador').innerHTML = 'Reiniciando em ' + segundos + ' segundos...';
                 }
             }, 1000);
         </script>
@@ -111,8 +115,9 @@ if ($ultimo_caixa && isset($ultimo_caixa['concurso'])) {
 
 // Se não falta mais nenhum concurso
 echo "<div style='font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; text-align: center;'>";
-echo "<h2 style='color: green;'>Sincronização Concluída com Sucesso!</h2>";
+echo "<h2 style='color: green;'>✅ Sincronização Concluída com Sucesso!</h2>";
 echo "<p>Todos os concursos existentes estão no seu banco local.</p>";
 echo "<p>Total de registros salvos: <b>" . count($local_por_id) . "</b></p>";
 echo "<br><a href='index.php' style='display: inline-block; background: #931f7c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Voltar para o Painel da Lotofácil</a>";
 echo "</div>";
+?>
